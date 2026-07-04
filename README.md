@@ -1,4 +1,4 @@
-# 🌌 AstraAgent V4.5.5 - Hybrid Hypervisor Edition
+# 🌌 AstraAgent
 
 ### Advanced Autonomous Multi-Engine PowerShell ReAct Agent
 
