@@ -1,9 +1,10 @@
-﻿<#
+<#
 .SYNOPSIS
-    AstraAgent V4.5.4 - Advanced Autonomous Multi-Engine PowerShell ReAct Agent.
+    AstraAgent V4.5.5 - Advanced Autonomous Multi-Engine PowerShell ReAct Agent.
 .DESCRIPTION
     Pure Hybrid ReAct loop engineered strictly for Local Ollama & OpenRouter Free Tier.
     Features automated real-time API model discovery to neutralize endpoint deprecations.
+    Enhanced with Context Sliding Window, Reasoning Token Parsers, and HTTP Retry Matrix.
 #>
 
 function Invoke-AstraAgent {
@@ -44,7 +45,7 @@ function Invoke-AstraAgent {
     Write-Host " ██║  ██║███████║   ██║   ██║  ██║██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   " -ForegroundColor Blue
     Write-Host " ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   " -ForegroundColor Blue
     Write-Host "==================================================================" -ForegroundColor DarkGray
-    Write-Host " [STATUS: STANDALONE OPERATOR ENVIRONMENT // AGENT V4.5.4 - LIVE API HARVESTER]" -ForegroundColor DarkCyan
+    Write-Host " [STATUS: STANDALONE OPERATOR ENVIRONMENT // AGENT V4.5.5 - ROBUST ENGINE]" -ForegroundColor DarkCyan
 
     $bootLines = @(
         "[~] Booting secure standalone kernel...      ",
@@ -60,7 +61,7 @@ function Invoke-AstraAgent {
     $welcomePool = @(
         "Hybrid core operational. Local and Cloud routing active.",
         "Zero-cost matrix established. Awaiting tactical vectors.",
-        "Live network probing engine active. API 404 blockades bypassed."
+        "Live network probing engine active. Resilience matrices deployed."
     )
     $msg    = $welcomePool | Get-Random
     $border = "+------------------------------------------------------------------+"
@@ -128,6 +129,12 @@ OPERATIONAL LAWS:
         Write-Host "[*] Step $IterationCount" -ForegroundColor Cyan
         Write-Host "[-] Consulting Astra Core intelligence matrix..." -ForegroundColor DarkGray
 
+        # FIX 1: SLIDING WINDOW MEMORY PROTECTION
+        $HistoryLines = $ConversationHistory -split "`n"
+        if ($HistoryLines.Count -gt 25) {
+            $ConversationHistory = ($HistoryLines[-25..-1] -join "`n") + "`n"
+        }
+
         if ($ApiProvider -eq "Ollama") {
             $Payload = @{
                 model   = $Model
@@ -153,28 +160,66 @@ OPERATIONAL LAWS:
         $AgentData = $null
         $ActualModelText = ""
         
-        try {
-            $handler = New-Object System.Net.Http.HttpClientHandler
-            $handler.UseProxy = $false
-            
-            $client = New-Object System.Net.Http.HttpClient -ArgumentList $handler
-            $client.Timeout = [System.TimeSpan]::FromSeconds(180)
+        # FIX 2: HTTP RETRY MATRIX FOR TRANS-NET STABILITY
+        $MaxRetries = 3
+        $RetryCount = 0
+        $HttpSuccess = $false
 
-            if ($ApiProvider -eq "OpenRouter") {
-                $client.DefaultRequestHeaders.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", $OpenRouterKey)
-                $client.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/AstraAgent")
-                $client.DefaultRequestHeaders.Add("X-Title", "AstraAgent-Hybrid")
+        while (-not $HttpSuccess -and $RetryCount -lt $MaxRetries) {
+            try {
+                $handler = New-Object System.Net.Http.HttpClientHandler
+                $handler.UseProxy = $false
+                
+                $client = New-Object System.Net.Http.HttpClient -ArgumentList $handler
+                $client.Timeout = [System.TimeSpan]::FromSeconds(180)
+
+                if ($ApiProvider -eq "OpenRouter") {
+                    $client.DefaultRequestHeaders.Authorization = New-Object System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", $OpenRouterKey)
+                    $client.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/AstraAgent")
+                    $client.DefaultRequestHeaders.Add("X-Title", "AstraAgent-Hybrid")
+                }
+
+                $content = New-Object System.Net.Http.StringContent($Payload, [System.Text.Encoding]::UTF8, "application/json")
+                $TargetUri = New-Object System.Uri($TargetUrl)
+                
+                $response = $client.PostAsync($TargetUri, $content).GetAwaiter().GetResult()
+                $RawHttpOutput = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult().Trim()
+                
+                $StatusCode = [int]$response.StatusCode
+                $client.Dispose()
+                $handler.Dispose()
+
+                if ($StatusCode -eq 429) {
+                    $RetryCount++
+                    Write-Host "[!] Rate limited (429) by provider. Retry pipeline active ($RetryCount/$MaxRetries). Sleeping 8s..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 8
+                    continue
+                }
+                if ($StatusCode -ge 500) {
+                    $RetryCount++
+                    Write-Host "[!] Endpoint server fault ($StatusCode). Retrying request ($RetryCount/$MaxRetries)..." -ForegroundColor Yellow
+                    Start-Sleep -Seconds 4
+                    continue
+                }
+
+                $HttpSuccess = $true
+            } catch {
+                $RetryCount++
+                if ($RetryCount -eq $MaxRetries) {
+                    Write-Host "[!] CRITICAL: Pipeline networking failure after max retries." -ForegroundColor Red
+                    break
+                }
+                Start-Sleep -Seconds 3
             }
+        }
 
-            $content = New-Object System.Net.Http.StringContent($Payload, [System.Text.Encoding]::UTF8, "application/json")
-            $TargetUri = New-Object System.Uri($TargetUrl)
-            
-            $response = $client.PostAsync($TargetUri, $content).GetAwaiter().GetResult()
-            $RawHttpOutput = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult().Trim()
-            
-            $client.Dispose()
-            $handler.Dispose()
+        if (-not $HttpSuccess) {
+            Write-Host "[!] Session terminated due to unstable API connection matrix." -ForegroundColor Red
+            break
+        }
 
+        # PARSING ENVELOPE
+        try {
             if ($ApiProvider -eq "Ollama") {
                 $OllamaEnvelope = $RawHttpOutput | ConvertFrom-Json
                 $ActualModelText = $OllamaEnvelope.response.Trim()
@@ -183,8 +228,17 @@ OPERATIONAL LAWS:
                 if ($OpenRouterEnvelope.error) {
                     throw "OpenRouter API Error: $($OpenRouterEnvelope.error.message)"
                 }
-                if ($OpenRouterEnvelope.choices -and $OpenRouterEnvelope.choices[0].message.content) {
-                    $ActualModelText = $OpenRouterEnvelope.choices[0].message.content.Trim()
+                
+                # FIX 3: REASONING & CONTENT FALLBACK INTEGRATION
+                if ($OpenRouterEnvelope.choices) {
+                    $MessageData = $OpenRouterEnvelope.choices[0].message
+                    if ($MessageData.content) {
+                        $ActualModelText = $MessageData.content.Trim()
+                    } elseif ($MessageData.reasoning) {
+                        $ActualModelText = $MessageData.reasoning.Trim()
+                    } else {
+                        throw "Malformed choice token array (No text content or reasoning payload found)."
+                    }
                 } else {
                     throw "OpenRouter returned an unparsable response envelope."
                 }
@@ -193,7 +247,7 @@ OPERATIONAL LAWS:
             $AgentData = $ActualModelText | ConvertFrom-Json
             
         } catch {
-            Write-Host "[!] CRITICAL: Core Hybrid Matrix pipeline exception." -ForegroundColor Red
+            Write-Host "[!] CRITICAL: Core Hybrid Matrix pipeline exception during JSON parsing." -ForegroundColor Red
             Write-Host "[*] Technical Details: $_" -ForegroundColor DarkGray
             if ($RawHttpOutput -and $OpenRouterKey) { 
                 $MaskedOutput = $RawHttpOutput -replace [regex]::Escape($OpenRouterKey), "sk-or-MASKED"
@@ -344,7 +398,7 @@ if ($EngineChoice -eq "1") {
         if ($ollamaOutput.Count -gt 1) {
             $availableModels = $ollamaOutput[1..($ollamaOutput.Count - 1)] | ForEach-Object { ($_ -split '\s+')[0] } | Where-Object { $_ -ne "" }
             if ($availableModels.Count -gt 0) {
-                $selectedModel = $availableModels | Out-GridView -Title "AstraAgent V4.5.4 — Select Ollama Model" -OutputMode Single
+                $selectedModel = $availableModels | Out-GridView -Title "AstraAgent V4.5.5 — Select Ollama Model" -OutputMode Single
                 if ($selectedModel) { Invoke-AstraAgent -ApiProvider "Ollama" -Model $selectedModel }
             }
         } else { Write-Host "[!] Error: No models registered inside Ollama." -ForegroundColor Red }
@@ -364,7 +418,6 @@ elseif ($EngineChoice -eq "2") {
     try {
         $ModelsResponse = Invoke-RestMethod -Uri "https://openrouter.ai/api/v1/models" -Method Get -TimeoutSec 15
         if ($ModelsResponse -and $ModelsResponse.data) {
-            # Strictly harvest free tier models dynamically
             $FreeModels = $ModelsResponse.data | Where-Object { 
                 $_.id -like "*:free" -or ($_.pricing -and [double]$_.pricing.prompt -eq 0)
             }
@@ -376,7 +429,7 @@ elseif ($EngineChoice -eq "2") {
                         Description = $_.name
                     }
                 }
-                $SelectedGrid = $SelectionList | Out-GridView -Title "AstraAgent V4.5.4 — Select LIVE Free Cloud Model" -OutputMode Single
+                $SelectedGrid = $SelectionList | Out-GridView -Title "AstraAgent V4.5.5 — Select LIVE Free Cloud Model" -OutputMode Single
                 if ($SelectedGrid) { $ORModel = $SelectedGrid.ModelID } else { return }
             } else { throw "API registry returned 0 zero-cost models." }
         } else { throw "Malformed payload from endpoint registry." }
